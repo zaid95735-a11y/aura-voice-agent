@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aura Skincare - AI Voice Agent Aria</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Inter,system-ui,sans-serif}
+body{background:#f8f7ff;color:#222}
+.container{max-width:1200px;margin:0 auto;padding:20px}
+header{text-align:center;padding:20px;background:white;border-radius:16px;margin-bottom:20px;box-shadow:0 4px 12px rgba(0,0,0,0.05)}
+header h1{color:#6c3ce0}
+.main-grid{display:grid;grid-template-columns:1.2fr 0.8fr;gap:20px}
+@media(max-width:900px){.main-grid{grid-template-columns:1fr}}
+.agent-card,.helper-card,.policy-card,.test-card,.summary-card{background:white;border-radius:16px;padding:20px;box-shadow:0 4px 12px rgba(0,0,0,0.05);margin-bottom:20px}
+.status-indicator{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f1efff;border-radius:30px;width:fit-content;margin-bottom:15px}
+.dot{width:12px;height:12px;background:#9ca3af;border-radius:50%}
+.dot.listening{background:#22c55e;animation:pulse 1s infinite}
+.dot.thinking{background:#f59e0b;animation:pulse 0.6s infinite}
+.dot.speaking{background:#6c3ce0;animation:pulse 0.8s infinite}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}
+.btn{flex:1;padding:14px;border:none;border-radius:10px;font-weight:600;cursor:pointer;font-size:16px}
+.btn.start{background:#6c3ce0;color:white}
+.btn.end{background:#ef4444;color:white}
+.btn:disabled{opacity:0.5}
+.live-transcript{min-height:120px;background:#faf9ff;border:1px dashed #d8d0ff;border-radius:12px;padding:14px;max-height:300px;overflow-y:auto}
+.order{padding:12px;background:#f9fafb;border:1px solid #eee;border-radius:10px;margin:8px 0;cursor:pointer}
+.badge{padding:2px 8px;border-radius:20px;font-size:12px;color:white}
+.badge.out{background:#f59e0b}.badge.delivered{background:#22c55e}.badge.processing{background:#3b82f6}
+#jsonSummary{background:#0f0f13;color:#a5f3a5;padding:14px;border-radius:10px;font-size:13px;overflow-x:auto;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div class="container">
+<header><h1>Aura Skincare</h1><p>AI Voice CX Agent - <strong>Aria</strong> | By Mohd Zaid Khan</p></header>
+<div class="main-grid">
+<div class="left-panel">
+<div class="agent-card">
+<div class="status-indicator"><span class="dot" id="dot"></span><span id="statusText">Ready to Start</span></div>
+<h2>Aria - Assistant</h2>
+<div style="display:flex;gap:12px;margin:16px 0"><button id="startBtn" class="btn start">Start Call</button><button id="endBtn" class="btn end" disabled>End Call</button></div>
+<div class="live-transcript" id="liveTranscript"><p style="color:#888;text-align:center">Click Start Call, allow mic. Use Chrome.</p></div>
+</div>
+<div class="summary-card" id="summaryCard" style="display:none;"><h3>Post-Call Summary</h3><div id="transcriptDisplay"></div><h4>JSON</h4><pre id="jsonSummary"></pre></div>
+</div>
+<div class="right-panel">
+<div class="helper-card"><h3>Test Orders (Click)</h3>
+<div class="order" onclick="fillOrder('ORD-101')"><b>ORD-101</b> - Priya Sharma<br>Vitamin C Serum - Rs.699<br><span class="badge out">Out for Delivery</span> BlueDart BD-982103</div>
+<div class="order" onclick="fillOrder('ORD-102')"><b>ORD-102</b> - Rahul Verma<br>Sunscreen SPF 50 - Rs.499<br><span class="badge delivered">Delivered</span> 14 days ago</div>
+<div class="order" onclick="fillOrder('ORD-103')"><b>ORD-103</b> - Ananya Patel<br>Face Wash + Toner - Rs.850<br><span class="badge processing">Processing</span> Eligible for cancellation</div>
+</div>
+<div class="helper-card"><h3>Brand Policies</h3><ul style="padding-left:18px;line-height:1.6;font-size:14px"><li>Shipping: Free above Rs.499 else Rs.50, 3-5 days</li><li>Return: 7 days unopened unused</li><li>Cancellation: Only Processing</li><li>COD: Up to Rs.2500</li></ul></div>
+</div></div></div>
+<script>
+// Yaha pura JS logic hai jo maine pehle banaya tha - 150 lines
+const mockOrders={"ORD-101":{customer:"Priya Sharma",product:"Vitamin C Serum (30ml)",value:"Rs.699",status:"Out for Delivery",details:"BlueDart — BD-982103. Expected by 6 PM today"},"ORD-102":{customer:"Rahul Verma",product:"Hydrating Sunscreen SPF 50",value:"Rs.499",status:"Delivered",details:"Delhivery — DL-441029. Delivered 14 days ago"},"ORD-103":{customer:"Ananya Patel",product:"Green Tea Face Wash + Toner",value:"Rs.850",status:"Processing",details:"Ordered 3 hours ago. Eligible for cancellation"}};
+let conversation=[],isCallActive=false,recognition=null,currentOrderId=null,lastIntent="GENERAL_QUERY";
+const statusText=document.getElementById('statusText'),dot=document.getElementById('dot'),liveTranscriptEl=document.getElementById('liveTranscript'),startBtn=document.getElementById('startBtn'),endBtn=document.getElementById('endBtn');
+function setState(s,t){dot.className='dot '+s;statusText.textContent=t;}
+function addToTranscript(r,t){conversation.push({role:r,text:t});const d=document.createElement('div');d.style.margin='8px 0';d.textContent=(r==='user'?'You: ':'Aria: ')+t;liveTranscriptEl.appendChild(d);liveTranscriptEl.scrollTop=liveTranscriptEl.scrollHeight;}
+function get_order_details(id){return mockOrders[id.toUpperCase().trim()]||null;}
+function decideResponse(txt){
+ const l=txt.toLowerCase();const m=txt.match(/ORD-\d{3}/i);if(m)currentOrderId=m[0].toUpperCase();
+ if(l.includes('flight')||l.includes('goa')){lastIntent="OUT_OF_SCOPE";return "I'm sorry, I can only help with Aura Skincare related queries like orders, shipping, returns, and cancellations. I cannot book flights.";}
+ if(l.includes('return')||l.includes('refund')){lastIntent="RETURN_REQUEST";if(l.includes('20 days')||l.includes('opened'))return "As per our return policy, returns are accepted within 7 days for unopened, unused products. Since you mentioned opened and 20 days ago, this falls outside policy. If damaged, report within 48h with photos for replacement.";if(currentOrderId==='ORD-102')return "Order ORD-102 delivered 14 days ago. Return window is 7 days for unopened products, so cannot process return.";return "Returns within 7 days for unopened unused products. Damaged report within 48h with photos.";}
+ if(l.includes('cancel')){lastIntent="CANCELLATION_REQUEST";if(currentOrderId){const o=get_order_details(currentOrderId);if(o){if(o.status==='Processing')return `Yes, ${currentOrderId} is ${o.status} and eligible for cancellation. ${o.details}`;else return `${currentOrderId} is ${o.status}. Cancellation only while Processing. Cannot cancel Shipped/Out for Delivery, but you may refuse at doorstep.`;}return `Couldn't locate ${currentOrderId}. Try ORD-101, 102, 103.`;}return "Orders can be cancelled only while Processing.";}
+ if(l.includes('cod')){lastIntent="COD_QUERY";return "COD available up to Rs.2500, cash or UPI at doorstep.";}
+ if(m||l.includes('order')||l.includes('track')){lastIntent="ORDER_TRACKING";if(!currentOrderId)return "Please share order ID like ORD-101, ORD-102, ORD-103.";const o=get_order_details(currentOrderId);if(!o)return `Couldn't locate ${currentOrderId}. Verify ID? Try ORD-101,102,103.`;return `Found ${currentOrderId}. ${o.product} for ${o.value} by ${o.customer}. Status: ${o.status}. ${o.details}.`;}
+ lastIntent="GENERAL_QUERY";return "Hi, I'm Aria from Aura Skincare! I can help with order tracking, shipping, returns, cancellations, COD. Try ORD-101, 102, 103.";
+}
+function speak(t){setState('speaking','Speaking...');speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);const v=speechSynthesis.getVoices();const iv=v.find(x=>x.lang==='en-IN')||v.find(x=>x.lang.startsWith('en'));if(iv)u.voice=iv;u.rate=0.95;u.onend=()=>{if(isCallActive){setState('listening','Listening...');try{recognition.start();}catch(e){}}};speechSynthesis.speak(u);}
+function initRec(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){alert('Use Chrome');return null;}const r=new SR();r.continuous=false;r.lang='en-IN';r.onresult=e=>{const tr=e.results[0][0].transcript;addToTranscript('user',tr);setState('thinking','Thinking...');setTimeout(()=>{const res=decideResponse(tr);addToTranscript('agent',res);speak(res);},600);};r.onerror=()=>{if(isCallActive)setTimeout(()=>{try{r.start();}catch(e){}},1000);};return r;}
+startBtn.onclick=()=>{conversation=[];liveTranscriptEl.innerHTML='';currentOrderId=null;isCallActive=true;startBtn.disabled=true;endBtn.disabled=false;document.getElementById('summaryCard').style.display='none';recognition=initRec();if(recognition){try{recognition.start();}catch(e){}const w="Hello! This is Aria from Aura Skincare. How can I help you today?";addToTranscript('agent',w);speak(w);}};
+endBtn.onclick=()=>{isCallActive=false;startBtn.disabled=false;endBtn.disabled=true;if(recognition)try{recognition.stop();}catch(e){}speechSynthesis.cancel();setState('','Call Ended');const tr=conversation.map(c=>`${c.role==='user'?'Customer':'Agent'}: ${c.text}`).join('\n');const sum=conversation.length>2?`Customer ${lastIntent} for ${currentOrderId||'general'}.`:"Short call";const out={customer_intent:lastIntent,order_id:currentOrderId||null,resolution_status:conversation.length>3?"RESOLVED":"PARTIAL",call_summary:sum,customer_name:currentOrderId?mockOrders[currentOrderId]?.customer:null,timestamp:new Date().toISOString()};document.getElementById('transcriptDisplay').innerHTML=`<pre style="white-space:pre-wrap;background:#f9f9ff;padding:12px;border-radius:8px">${tr}</pre>`;document.getElementById('jsonSummary').textContent=JSON.stringify(out,null,2);document.getElementById('summaryCard').style.display='block';};
+function fillOrder(id){if(!isCallActive){alert('Start Call first');return;}const sim=`Where is my order ${id}?`;addToTranscript('user',sim);setState('thinking','Thinking...');setTimeout(()=>{const r=decideResponse(sim);addToTranscript('agent',r);speak(r);},500);}
+</script>
+</body>
+</html>
